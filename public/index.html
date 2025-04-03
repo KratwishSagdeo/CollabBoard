@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CollabBoard</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #1e1e2e;
+            color: white;
+            text-align: center;
+        }
+        canvas {
+            border: 3px solid #61dafb;
+            background-color: white;
+            border-radius: 10px;
+            cursor: crosshair;
+            margin-top: 20px;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.5);
+        }
+        .tools {
+            margin: 10px;
+            padding: 10px;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            background: #292a3a;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.5);
+        }
+        .tools button {
+            padding: 12px;
+            font-size: 16px;
+            border: none;
+            cursor: pointer;
+            border-radius: 8px;
+            background: linear-gradient(45deg, #61dafb, #21a1f1);
+            color: white;
+            transition: 0.3s;
+        }
+        .tools button:hover {
+            background: linear-gradient(45deg, #21a1f1, #1b86d1);
+        }
+        .eraser { background: red; color: white; }
+    </style>
+</head>
+<body>
+    <h1>Real-Time Collaborative Whiteboard</h1>
+    <div class="tools">
+        <button onclick="setTool('pencil')">Pencil</button>
+        <button class="eraser" onclick="setTool('eraser')">Eraser</button>
+        <input type="range" id="eraserSize" min="5" max="50" value="10" onchange="setEraserSize(this.value)" />
+        <button onclick="setTool('rectangle')">Rectangle</button>
+        <button onclick="setTool('circle')">Circle</button>
+        <input type="color" id="colorPicker" onchange="setColor(this.value)" />
+        <button onclick="clearCanvas()">Clear</button>
+        <button onclick="downloadCanvas()">Download</button>
+    </div>
+    <canvas id="board" width="800" height="500"></canvas>
+    <script>
+        const socket = io();
+        const canvas = document.getElementById('board');
+        const ctx = canvas.getContext('2d');
+        let drawing = false;
+        let tool = 'pencil';
+        let color = 'black';
+        let eraserSize = 10;
+        let lastX = 0, lastY = 0;
+        let startX = 0, startY = 0;
+
+        function setTool(selectedTool) {
+            tool = selectedTool;
+        }
+
+        function setColor(selectedColor) {
+            color = selectedColor;
+        }
+
+        function setEraserSize(size) {
+            eraserSize = size;
+        }
+
+        function clearCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            socket.emit('clear');
+        }
+
+        function downloadCanvas() {
+            const link = document.createElement('a');
+            link.download = 'collabboard.png';
+            link.href = canvas.toDataURL();
+            link.click();
+        }
+
+        canvas.addEventListener('mousedown', (event) => {
+            drawing = true;
+            startX = lastX = event.offsetX;
+            startY = lastY = event.offsetY;
+        });
+
+        canvas.addEventListener('mouseup', (event) => {
+            if (tool === 'rectangle' || tool === 'circle') {
+                drawShape(tool, startX, startY, event.offsetX, event.offsetY, true);
+            }
+            drawing = false;
+        });
+
+        canvas.addEventListener('mousemove', (event) => {
+            if (!drawing || tool === 'rectangle' || tool === 'circle') return;
+            draw(event.offsetX, event.offsetY, tool, true);
+        });
+
+        function draw(x, y, tool, emit) {
+            ctx.strokeStyle = tool === 'eraser' ? 'white' : color;
+            ctx.lineWidth = tool === 'eraser' ? eraserSize : 2;
+            ctx.lineCap = 'round';
+            
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            [lastX, lastY] = [x, y];
+            
+            if (emit) {
+                socket.emit('draw', { x, y, lastX, lastY, tool, color, eraserSize });
+            }
+        }
+
+        socket.on('clear', () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        });
+
+        socket.on('canvasState', (data) => {
+            data.forEach(item => {
+                draw(item.x, item.y, item.tool, false);
+            });
+        });
+    </script>
+</body>
+</html>
