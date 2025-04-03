@@ -129,18 +129,28 @@
             redoStack = [];
         });
 
+        // ✅ Only ONE mousemove event listener
         canvas.addEventListener('mousemove', (event) => {
             if (!drawing) return;
+
+            let x = event.offsetX;
+            let y = event.offsetY;
+
             if (tool === 'pencil') {
                 ctx.strokeStyle = color;
                 ctx.lineWidth = 2;
                 ctx.lineCap = "round";
-                ctx.lineTo(event.offsetX, event.offsetY);
+                ctx.lineTo(x, y);
                 ctx.stroke();
+
+                // 🔥 Emit event to server
+                socket.emit('draw', { x, y, color });
+
                 ctx.beginPath();
-                ctx.moveTo(event.offsetX, event.offsetY);
-            } else if (tool === 'eraser') {
-                ctx.clearRect(event.offsetX - eraserSize / 2, event.offsetY - eraserSize / 2, eraserSize, eraserSize);
+                ctx.moveTo(x, y);
+            } 
+            else if (tool === 'eraser') {
+                ctx.clearRect(x - eraserSize / 2, y - eraserSize / 2, eraserSize, eraserSize);
             }
         });
 
